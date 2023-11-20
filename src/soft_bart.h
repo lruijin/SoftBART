@@ -8,7 +8,7 @@ struct Hypers;
 struct Node;
 
 struct Hypers {
-
+  
   double alpha;
   double beta;
   double gamma;
@@ -22,69 +22,82 @@ struct Hypers {
   int num_tree;
   int num_groups;
   arma::vec s;
+  arma::vec theta;
+  arma::vec eta;
+  arma::vec Z;
+  arma::vec Z_test;
   arma::vec logs;
   arma::uvec group;
-
+  bool sim;
+  
   arma::vec rho_propose;
-
+  
   std::vector<std::vector<unsigned int> > group_to_vars;
-
+  
   double sigma_hat;
   double sigma_mu_hat;
   double alpha_scale;
   double alpha_shape_1;
   double alpha_shape_2;
-
+  
   void UpdateSigma(const arma::vec& r, const arma::vec& weights);
   void UpdateSigmaMu(const arma::vec& means);
   void UpdateAlpha();
   void UpdateGamma(std::vector<Node*>& forest);
   void UpdateBeta(std::vector<Node*>& forest);
   void UpdateTauRate(const std::vector<Node*>& forest);
-
+  void UpdateTheta(const std::vector<Node*>& forest, 
+                   const arma::vec& Y,
+                   const arma::vec& weights,
+                   const arma::mat& X,
+                   const arma::mat& X_test,
+                   Hypers& hypers);
+  void SetTheta(arma::vec theta_new);
+  //void loglik_Theta(const std::vector<Node*>& forest);
+  
   // For updating tau
   // double loglik_tau(double tau,
   //                   const std::vector<Node*>& forest,
   //                   const arma::mat& X, const arma::vec& Y);
   // void update_tau(std::vector<Node*>& forest,
   //                 const arma::mat& X, const arma::vec& Y);
-
+  
   int SampleVar() const;
-
+  
   Hypers(Rcpp::List hypers);
   Hypers();
-
+  
 };
 
 struct Node {
-
+  
   bool is_leaf;
   bool is_root;
   Node* left;
   Node* right;
   Node* parent;
-
+  
   // Branch parameters
   int var;
   double val;
   double lower;
   double upper;
   double tau;
-
+  
   // Leaf parameters
   double mu;
-
+  
   // Data for computing weights
   double current_weight;
-
+  
   // Functions
-  void Root(const Hypers& hypers);
-  void GetLimits();
-  void AddLeaves();
-  void BirthLeaves(const Hypers& hypers);
+  void Root(Hypers& hypers);
+  void GetLimits(Hypers& hypers);
+  void AddLeaves(Hypers& hypers);
+  void BirthLeaves(Hypers& hypers);
   bool is_left();
-  void GenTree(const Hypers& hypers);
-  void GenBelow(const Hypers& hypers);
+  void GenTree(Hypers& hypers);
+  void GenBelow(Hypers& hypers);
   void GetW(const arma::mat& X, int i);
   void DeleteLeaves();
   void UpdateMu(const arma::vec& Y, const arma::vec& weights,
@@ -94,10 +107,11 @@ struct Node {
   void SetTau(double tau_new);
   double loglik_tau(double tau_new, const arma::mat& X, const arma::vec& Y,
                     const arma::vec& weights, const Hypers& hypers);
-
+  void SetLowerUpper(Hypers& hypers);
+    
   Node();
   ~Node();
-
+  
 };
 
 
@@ -107,7 +121,7 @@ struct Opts {
   int num_thin;
   int num_save;
   int num_print;
-
+  
   bool update_sigma_mu;
   bool update_s;
   bool update_alpha;
@@ -118,51 +132,54 @@ struct Opts {
   bool update_num_tree;
   bool update_sigma;
   bool cache_trees;
-
-Opts() : update_sigma_mu(true), update_s(true), update_alpha(true),
-         update_beta(false), update_gamma(false), update_tau(true),
-         update_tau_mean(false), update_num_tree(false), update_sigma(true), cache_trees(false) {
-
-  num_burn = 1;
-  num_thin = 1;
-  num_save = 1;
-  num_print = 100;
-
-}
-
-Opts(Rcpp::List opts_) {
-
-  update_sigma_mu = opts_["update_sigma_mu"];
-  update_s = opts_["update_s"];
-  update_alpha = opts_["update_alpha"];
-  update_beta = opts_["update_beta"];
-  update_gamma = opts_["update_beta"];
-  update_tau = opts_["update_tau"];
-  update_tau_mean = opts_["update_tau_mean"];
-  update_num_tree = opts_["update_num_tree"];
-  update_sigma = opts_["update_sigma"];
-  num_burn = opts_["num_burn"];
-  num_thin = opts_["num_thin"];
-  num_save = opts_["num_save"];
-  num_print = opts_["num_print"];
-  cache_trees = opts_["cache_trees"];
-}
-
+  //bool update_theta;
+  
+  Opts() : update_sigma_mu(true), update_s(true), update_alpha(true),
+  update_beta(false), update_gamma(false), update_tau(true),
+  update_tau_mean(false), update_num_tree(false), 
+  update_sigma(true), cache_trees(false) {
+    
+    num_burn = 1;
+    num_thin = 1;
+    num_save = 1;
+    num_print = 100;
+    
+  }
+  
+  Opts(Rcpp::List opts_) {
+    
+    update_sigma_mu = opts_["update_sigma_mu"];
+    update_s = opts_["update_s"];
+    update_alpha = opts_["update_alpha"];
+    update_beta = opts_["update_beta"];
+    update_gamma = opts_["update_beta"];
+    update_tau = opts_["update_tau"];
+    update_tau_mean = opts_["update_tau_mean"];
+    update_num_tree = opts_["update_num_tree"];
+    update_sigma = opts_["update_sigma"];
+    num_burn = opts_["num_burn"];
+    num_thin = opts_["num_thin"];
+    num_save = opts_["num_save"];
+    num_print = opts_["num_print"];
+    cache_trees = opts_["cache_trees"];
+    //update_theta = opts_["update_theta"];
+  }
+  
 };
 
 class Forest {
-
- private:
-
+  
+private:
+  
   std::vector<Node*> trees;
-  std::vector<std::vector<Node*>> saved_forests;
+  std::vector<std::vector<Node*> > saved_forests;
   Hypers hypers;
   Opts opts;
-
+  
   arma::umat tree_counts;
-
- public:
-
+  
+public:
+  
   /* Forest(Rcpp::List hypers_); */
   Forest(Rcpp::List hypers_, Rcpp::List opts_);
   ~Forest();
@@ -183,28 +200,43 @@ class Forest {
   void set_s(const arma::vec& s_);
   arma::vec do_predict(const arma::mat& X);
   double get_sigma_mu();
-
+  
 };
 
 
 Opts InitOpts(int num_burn, int num_thin, int num_save, int num_print,
               bool update_sigma_mu, bool update_s, bool update_alpha,
               bool update_beta, bool update_gamma, bool update_tau,
-              bool update_tau_mean, bool update_num_tree, bool update_sigma);
+              bool update_tau_mean, bool update_num_tree, 
+              bool update_sigma);
 
 
-Hypers InitHypers(const arma::mat& X, double sigma_hat, double alpha, double beta,
+// Hypers InitHypers(const arma::mat& X, const arma::mat& X_test, const uvec& group, double sigma_hat, double alpha, double beta,
+//                   double gamma, double k, double width, double shape,
+//                   int num_tree, double alpha_scale, double alpha_shape_1,
+//                   double alpha_shape_2, double tau_rate, double num_tree_prob,
+//                   double temperature, bool sim);
+
+Hypers InitHypers(const arma::mat& X, const arma::mat& X_test, const arma::uvec& group, double sigma_hat,
+                  double alpha, double beta,
                   double gamma, double k, double width, double shape,
                   int num_tree, double alpha_scale, double alpha_shape_1,
                   double alpha_shape_2, double tau_rate, double num_tree_prob,
-                  double temperature);
+                  double temperature, arma::vec theta, bool sim);
 
 void GetSuffStats(Node* n, const arma::vec& y, const arma::vec& weights,
                   const arma::mat& X, const Hypers& hypers,
                   arma::vec& mu_hat_out, arma::mat& Omega_inv_out);
 
+void GetSuffStats_Theta(const std::vector<Node*>& forest, const arma::vec& y, const arma::vec& weights,
+                        const arma::mat& X, const Hypers& hypers,
+                        arma::vec& mu_hat, arma::mat& Omega_inv);
+
 double LogLT(Node* n, const arma::vec& Y, const arma::vec& weights,
              const arma::mat& X, const Hypers& hypers);
+
+double LogLT_Theta(const std::vector<Node*>& forest, const arma::vec& Y, const arma::vec& weights,
+                   const arma::mat& X, Hypers& hypers);
 
 double cauchy_jacobian(double tau, double sigma_hat);
 
@@ -225,6 +257,21 @@ arma::vec predict(Node* node,
 
 bool is_left(Node* n);
 
+arma::vec theta2eta(const Hypers& hypers);
+
+arma::vec theta_proposal(arma::vec theta);
+
+// void SetTheta(arma::vec theta_new, Hypers& hypers);
+
+// void UpdateTheta(const std::vector<Node*>& forest, const arma::vec& Y,
+//                         const arma::vec& weights,
+//                         const arma::mat& X,
+//                         Hypers& hypers);
+
+double loglik_Theta(const std::vector<Node*>& forest, double theta_new, const arma::mat& X,
+                    const arma::vec& Y, const arma::vec& weights,
+                    const Hypers& hypers);
+
 double SplitProb(Node* node, const Hypers& hypers);
 int depth(Node* node);
 void leaves(Node* x, std::vector<Node*>& leafs);
@@ -232,7 +279,7 @@ std::vector<Node*> leaves(Node* x);
 arma::vec get_means(std::vector<Node*>& forest);
 void get_means(Node* node, std::vector<double>& means);
 std::vector<Node*> init_forest(const arma::mat& X, const arma::vec& Y,
-                               const Hypers& hypers);
+                               Hypers& hypers);
 
 Rcpp::List do_soft_bart(const arma::mat& X,
                         const arma::vec& Y,
@@ -279,7 +326,7 @@ double forest_loglik(std::vector<Node*>& forest, double gamma, double beta);
 double tree_loglik(Node* node, int node_depth, double gamma, double beta);
 Node* rand(std::vector<Node*> ngb);
 void UpdateS(std::vector<Node*>& forest, Hypers& hypers);
-void copy_node(Node* nn, Node* n);
+void copy_node(Node* nn, Node* n, Hypers& hypers);
 Node* copy_tree(Node* root, Hypers& hypers);
 std::vector<Node*> copy_forest(std::vector<Node*> forest, Hypers& hypers);
 
@@ -295,7 +342,7 @@ arma::vec get_tau_vec(const std::vector<Node*>& forest);
 std::vector<Node*> TreeSwap(std::vector<Node*>& forest);
 std::vector<Node*> TreeSwapLast(std::vector<Node*>& forest);
 std::vector<Node*> AddTree(std::vector<Node*>& forest,
-                           const Hypers& hypers, const Opts& opts);
+                           Hypers& hypers, const Opts& opts);
 std::vector<Node*> DeleteTree(std::vector<Node*>& forest);
 void update_num_tree(std::vector<Node*>& forest, Hypers& hypers,
                      const Opts& opts,
@@ -337,87 +384,87 @@ struct rho_loglik {
   double alpha_scale;
   double alpha_shape_1;
   double alpha_shape_2;
-
+  
   double operator() (double rho) {
-
+    
     double alpha = rho_to_alpha(rho, alpha_scale);
-
+    
     double loglik = alpha * mean_log_s
-      + Rf_lgammafn(alpha)
+    + Rf_lgammafn(alpha)
       - p * Rf_lgammafn(alpha / p)
       + logpdf_beta(rho, alpha_shape_1, alpha_shape_2);
-
-    /* Rcpp::Rcout << "Term 1: " << alpha * mean_log_s << "\n"; */
-    /* Rcpp::Rcout << "Term 2:" << Rf_lgammafn(alpha) << "\n"; */
-    /* Rcpp::Rcout << "Term 3:" << -p * Rf_lgammafn(alpha / p) << "\n"; */
-    /* Rcpp::Rcout << "Term 4:" << logpdf_beta(rho, alpha_shape_1, alpha_shape_2) << "\n"; */
-
-    return loglik;
-
+      
+      /* Rcpp::Rcout << "Term 1: " << alpha * mean_log_s << "\n"; */
+      /* Rcpp::Rcout << "Term 2:" << Rf_lgammafn(alpha) << "\n"; */
+      /* Rcpp::Rcout << "Term 3:" << -p * Rf_lgammafn(alpha / p) << "\n"; */
+      /* Rcpp::Rcout << "Term 4:" << logpdf_beta(rho, alpha_shape_1, alpha_shape_2) << "\n"; */
+      
+      return loglik;
+      
   }
 };
 
 double slice_sampler(double x0, rho_loglik& g, double w,
                      double lower, double upper) {
-
-
+  
+  
   /* Find the log density at the initial point, if not already known. */
   double gx0 = g(x0);
-
+  
   /* Determine the slice level, in log terms. */
-
+  
   double logy = gx0 - exp_rand();
-
+  
   /* Find the initial interval to sample from */
-
+  
   double u = w * unif_rand();
   double L = x0 - u;
   double R = x0 + (w-u);
-
+  
   /* Expand the interval until its ends are outside the slice, or until the
-     limit on steps is reached */
-
+   limit on steps is reached */
+  
   do {
-
+    
     if(L <= lower) break;
     if(g(L) <= logy) break;
     L -= w;
-
+    
   } while(true);
-
+  
   do {
     if(R >= upper) break;
     if(g(R) <= logy) break;
     R += w;
   } while(true);
-
+  
   // Shrink interval to lower and upper bounds
-
+  
   if(L < lower) L = lower;
   if(R > upper) R = upper;
-
+  
   // Sample from the interval, shrinking it on each rejection
-
+  
   double x1 = 0.0;
-
+  
   do {
-
+    
     x1 = (R - L) * unif_rand() + L;
     double gx1 = g(x1);
-
+    
     if(gx1 >= logy) break;
-
+    
     if(x1 > x0) {
       R = x1;
     }
     else {
       L = x1;
     }
-
+    
   } while(true);
-
+  
   return x1;
-
+  
 }
 
 // PERTURB STUFF

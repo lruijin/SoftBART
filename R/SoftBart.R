@@ -22,18 +22,25 @@
 #' @param temperature The temperature applied to the posterior distribution; set to 1 unless you know what you are doing.
 #' @param weights Only used by the function \code{softbart}, this is a vector of weights to be used in heteroskedastic regression models, with the variance of an observation given by \code{sigma_sq / weight}.
 #' @param normalize_Y Do you want to compute \code{sigma_hat} after applying the standard BART max/min normalization to \eqn{(-0.5, 0.5)} for the outcome? If \code{FALSE}, no normalization is applied. This might be useful for fitting custom models where the outcome is normalized by hand.
+#' @param theta SIM coefficients.
 #'
 #' @return Returns a list containing the function arguments.
 Hypers <- function(X,Y, group = NULL, alpha = 1, beta = 2, gamma = 0.95, k = 2,
                    sigma_hat = NULL, shape = 1, width = 0.1, num_tree = 20,
                    alpha_scale = NULL, alpha_shape_1 = 0.5,
                    alpha_shape_2 = 1, tau_rate = 10, num_tree_prob = NULL,
-                   temperature = 1.0, weights = NULL, normalize_Y = TRUE) {
-
-  if(is.null(alpha_scale)) alpha_scale <- ncol(X)
+                   temperature = 1.0, weights = NULL, normalize_Y = TRUE, sim = TRUE) {
+  # browser()
+  
+  if(!sim) {
+    if(is.null(alpha_scale)) alpha_scale <- ncol(X)
+  } else {
+    if(is.null(alpha_scale)) alpha_scale <- 1
+  }
+  
   if(is.null(num_tree_prob)) num_tree_prob <- 2.0 / num_tree
   if(is.null(weights)) weights <- rep(1, length(Y))
-
+  
   out                                  <- list()
   out$weights                          <- weights
   out$alpha                            <- alpha
@@ -44,30 +51,40 @@ Hypers <- function(X,Y, group = NULL, alpha = 1, beta = 2, gamma = 0.95, k = 2,
   out$num_tree                         <- num_tree
   out$shape                            <- shape
   out$width                            <- width
-  if(is.null(group)) {
-    out$group                          <- 1:ncol(X) - 1
+  
+  if(!sim) {
+    if(is.null(group)) {
+      out$group                          <- 1:ncol(X) - 1
+    } else {
+      out$group                          <- group - 1
+    }
   } else {
-    out$group                          <- group - 1
-  }
-
+    out$group                            <- 0L # the single index Z will have only one column
+  }  
+  
   if(normalize_Y) {
     Y                                  <- normalize_bart(Y)
   }
   if(is.null(sigma_hat))
-    sigma_hat                          <- GetSigma(X,Y, weights = weights)
+    sigma_hat                          <- GetSigma2(X,Y, weights = weights)
+    # sigma_hat                        <- GetSigma(X,Y, weights = weights)  
 
   out$sigma                            <- sigma_hat
   out$sigma_hat                        <- sigma_hat
-
+  
   out$alpha_scale                      <- alpha_scale
   out$alpha_shape_1                    <- alpha_shape_1
   out$alpha_shape_2                    <- alpha_shape_2
   out$tau_rate                         <- tau_rate
   out$num_tree_prob                    <- num_tree_prob
   out$temperature                      <- temperature
-
+  
+  out$theta                            <- rep(pi/4,ncol(X))
+  out$theta[ncol(X)]                   <- pi/2 # A constant and will not be actually used in computing eta
+  out$sim                              <- sim
+  
   return(out)
-
+  
 }
 
 #' MCMC options for SoftBart
@@ -86,21 +103,24 @@ Hypers <- function(X,Y, group = NULL, alpha = 1, beta = 2, gamma = 0.95, k = 2,
 #' @param update_gamma If \code{TRUE}, gamma is updated using a Uniform(0.5, 1) prior.
 #' @param update_tau If \code{TRUE}, the bandwidth \code{tau} is updated for each tree
 #' @param update_tau_mean If \code{TRUE}, the mean of \code{tau} is updated
+#' @param update_theta If \code{TRUE}, functions of the single index model parameters \code{eta} is updated for each tree
 #' @param cache_trees If \code{TRUE}, we save the trees for each MCMC iteration when using the MakeForest interface
 #'
 #' @return Returns a list containing the function arguments.
 Opts <- function(num_burn = 2500, num_thin = 1, num_save = 2500, num_print = 100,
-                 update_sigma_mu = TRUE, update_s = TRUE, update_alpha = TRUE,
+                 update_sigma_mu = TRUE, update_s = FALSE, update_alpha = FALSE,
                  update_beta = FALSE, update_gamma = FALSE, update_tau = TRUE,
                  update_tau_mean = FALSE, update_sigma = TRUE,
-                 cache_trees = TRUE) {
+                 cache_trees = TRUE, update_theta = TRUE) {
+  
+  # Above differs from original softbart: update_s and update_alpha both turned into FALSE; added update_theta
   out <- list()
   out$num_burn        <- num_burn
   out$num_thin        <- num_thin
   out$num_save        <- num_save
   out$num_print       <- num_print
   out$update_sigma_mu <- update_sigma_mu
-  out$update_s         <- update_s
+  out$update_s        <- update_s
   out$update_alpha    <- update_alpha
   out$update_beta     <- update_beta
   out$update_gamma    <- update_gamma
@@ -110,9 +130,10 @@ Opts <- function(num_burn = 2500, num_thin = 1, num_save = 2500, num_print = 100
   out$update_num_tree <- FALSE
   out$update_sigma    <- update_sigma
   out$cache_trees     <- cache_trees
-
+  out$update_theta    <- update_theta
+  
   return(out)
-
+  
 }
 
 normalize_bart <- function(y) {
@@ -136,7 +157,7 @@ unnormalize_bart <- function(z, a, b) {
 #' @param X A matrix of training data covariates.
 #' @param Y A vector of training data responses.
 #' @param X_test A matrix of test data covariates
-#' @param hypers A ;ist of hyperparameter values obtained from \code{Hypers} function
+#' @param hypers A list of hyperparameter values obtained from \code{Hypers} function
 #' @param opts A list of MCMC chain settings obtained from \code{Opts} function
 #' @param verbose If \code{TRUE}, progress of the chain will be printed to the console.
 #'
@@ -147,6 +168,8 @@ unnormalize_bart <- function(z, a, b) {
 #'   \item \code{y_hat_train_mean}: predicted values for the training data, averaged over iterations.
 #'   \item \code{y_hat_test_mean}: predicted values for the test data, averaged over iterations.
 #'   \item \code{sigma}: posterior samples of the error standard deviations.
+#'   \item \code{theta}: posterior samples of \code{theta} that produces the sindgle index model coefficients \code{eta}.
+#'   \item \code{tau}: posterior samples of the bandwidth parameter \code{tau}.
 #'   \item \code{sigma_mu}: posterior samples of \code{sigma_mu}, the standard deviation of the leaf node parameters.
 #'   \item \code{s}: posterior samples of \code{s}.
 #'   \item \code{alpha}: posterior samples of \code{alpha}.
@@ -201,38 +224,40 @@ unnormalize_bart <- function(z, a, b) {
 #' rmse(fit$y_hat_test_mean, sim_data$mu_test)
 #' rmse(fit$y_hat_train_mean, sim_data$mu)
 #' 
-softbart <- function(X, Y, X_test, hypers = NULL, opts = Opts(), verbose = TRUE) {
-
+simbart2 <- function(X, Y, X_test, hypers = NULL, opts = Opts(), verbose = TRUE) {
+  #browser()
+  
   if(is.null(hypers)){
     hypers <- Hypers(X,Y)
   }
-
+  
   ## Normalize Y
-  Z <- normalize_bart(Y)
-
-  ## Quantile normalize X
+  Ynorm <- normalize_bart(Y)
+  
+  ## Quantile normalize X ##to [0,1]
   n <- nrow(X)
   idx_train <- 1:n
   X_trans <- rbind(X, X_test)
-
+  
   if(is.data.frame(X_trans)) {
-    print("Preprocessing data frame")
+    # print("Preprocessing data frame")
     preproc_df <- preprocess_df(X_trans)
     X_trans <- preproc_df$X
-    print("Using default grouping; if this is not desired, preprocess data frame manually using preprocess_df before calling.")
-    hypers$group
-    hypers$group <- preproc_df$group
+    # print("Using default grouping; if this is not desired, preprocess data frame manually using preprocess_df before calling.")
+    # hypers$group
+    # hypers$group <- preproc_df$group
   }
   
   if(!verbose) {
     opts$num_print <- .Machine$integer.max
   }
-
+  
   X_trans <- quantile_normalize_bart(X_trans)
   X <- X_trans[idx_train,,drop=FALSE]
   X_test <- X_trans[-idx_train,,drop=FALSE]
-
-  fit <- SoftBart(X,Z,X_test,
+  
+  #browser()
+  fit <- SoftBart(X,Ynorm,X_test,
                   hypers$group,
                   hypers$alpha,
                   hypers$beta,
@@ -250,6 +275,8 @@ softbart <- function(X, Y, X_test, hypers = NULL, opts = Opts(), verbose = TRUE)
                   hypers$num_tree_prob,
                   hypers$temperature,
                   hypers$weights,
+                  hypers$theta,
+                  hypers$sim,
                   opts$num_burn,
                   opts$num_thin,
                   opts$num_save,
@@ -262,12 +289,13 @@ softbart <- function(X, Y, X_test, hypers = NULL, opts = Opts(), verbose = TRUE)
                   opts$update_tau,
                   opts$update_tau_mean,
                   opts$update_num_tree,
-                  opts$update_sigma)
-
-
+                  opts$update_sigma) #,
+  #                  opts$update_theta)
+  
+  
   a <- min(Y)
   b <- max(Y)
-
+  
   fit$y_hat_train <- unnormalize_bart(fit$y_hat_train, a, b)
   fit$y_hat_test <- unnormalize_bart(fit$y_hat_test, a, b)
   fit$sigma <- (b - a) * fit$sigma
@@ -277,25 +305,25 @@ softbart <- function(X, Y, X_test, hypers = NULL, opts = Opts(), verbose = TRUE)
   fit$y_hat_test_mean <- colMeans(fit$y_hat_test)
 
   fit$y <- Y
-
+  
   class(fit) <- "softbart"
-
+  
   return(fit)
-
+  
 }
 
 TreeSelect <- function(X,Y, X_test, hypers = NULL, tree_start = 25, opts = Opts()) {
-
+  
   if(is.null(hypers)){
     hypers <- Hypers(X,Y)
   }
-
+  
   best <- 0;
-
+  
   hypers$num_tree <- tree_start
   fit <- softbart(X,Y,X_test,hypers, opts)
   best <- mean(fit$loglik) + hypers$num_tree * log(1 - hypers$num_tree_prob)
-
+  
   while(TRUE) {
     tree_old <- hypers$num_tree
     tree_new <- 2 * tree_old
@@ -307,11 +335,11 @@ TreeSelect <- function(X,Y, X_test, hypers = NULL, tree_start = 25, opts = Opts(
     }
     best <- gof
   }
-
+  
   hypers$num_tree <- tree_old
   hypers$temperature <- 1.0
   fit <- softbart(X,Y,X_test,hypers, opts)
-
+  
   return(list(num_tree = tree_old, fit = fit))
 }
 
@@ -319,12 +347,12 @@ GetSigma <- function(X,Y, weights = NULL) {
   
   if(is.null(weights)) weights <- rep(1, length(Y))
   stopifnot(is.matrix(X) | is.data.frame(X))
-
+  
   if(is.data.frame(X)) {
     X <- model.matrix(~.-1, data = X)
   }
-
-
+  
+  
   fit <- cv.glmnet(x = X, y = Y, weights = weights)
   fitted <- predict_glmnet(fit, X)
   sigma_hat <- sqrt(mean((fitted - Y)^2))
@@ -335,7 +363,32 @@ GetSigma <- function(X,Y, weights = NULL) {
   # } else {
   #   sigma_hat <- sd(Y)
   # }
-
+  
   return(sigma_hat)
+  
+}
 
+GetSigma2 <- function(X,Y, weights = NULL) {
+  
+  if(is.null(weights)) weights <- rep(1, length(Y))
+  stopifnot(is.matrix(X) | is.data.frame(X))
+  
+  if(is.data.frame(X)) {
+    X <- model.matrix(~.-1, data = X)
+  }
+  
+  # 
+  # fit <- cv.glmnet(x = X, y = Y, weights = weights)
+  # fitted <- predict_glmnet(fit, X)
+  # sigma_hat <- sqrt(mean((fitted - Y)^2))
+  sigma_hat <- 0
+  if(nrow(X) > 2 * ncol(X)) {
+    fit <- lm(Y ~ X)
+    sigma_hat <- summary(fit)$sigma
+  } else {
+    sigma_hat <- sd(Y)
+  }
+  
+  return(sigma_hat)
+  
 }
