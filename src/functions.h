@@ -43,7 +43,7 @@ double expit(double x) {
 // [[Rcpp::export]]
 arma::vec rmvnorm(const arma::vec& mean, const arma::mat& Precision) {
   arma::vec z = arma::zeros<arma::vec>(mean.size());
-  for(int i = 0; i < mean.size(); i++) {
+  for(unsigned int i = 0; i < mean.size(); i++) {
     z(i) = norm_rand();
   }
   arma::mat Sigma = inv_sympd(Precision);
