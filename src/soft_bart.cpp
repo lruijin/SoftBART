@@ -1939,6 +1939,7 @@ arma::mat Forest::do_gibbs(const arma::mat& X, const arma::vec& Y,
 // X is X, not Z
 arma::vec Forest::predict_iteration(const arma::mat& X, int r_iter) {
   int cpp_iter = r_iter - 1;
+  unsigned int r_iter2 = (unsigned int) r_iter;
   if(r_iter > saved_forests.size())
     stop("Specified iteration exceeds number of saved trees");
   return predict(saved_forests[cpp_iter], X, hypers);
