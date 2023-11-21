@@ -1939,8 +1939,7 @@ arma::mat Forest::do_gibbs(const arma::mat& X, const arma::vec& Y,
 // X is X, not Z
 arma::vec Forest::predict_iteration(const arma::mat& X, int r_iter) {
   int cpp_iter = r_iter - 1;
-  unsigned int r_iter2 = (unsigned int) r_iter;
-  if(r_iter2 > saved_forests.size())
+  if(r_iter > saved_forests.size())
     stop("Specified iteration exceeds number of saved trees");
   return predict(saved_forests[cpp_iter], X, hypers);
 } 
@@ -2142,12 +2141,89 @@ double loglik_Theta(const std::vector<Node*>& forest, arma::vec theta_new, const
 }
 
 // Prior (unif on 0 to pi) as proposal
+
+//Inputs:
+//  forest, X, Y, weights, hypers: same definition as in logLT_Theta
+//  s: step_width of the proposal distribution
+//  toNew: boolean, generate new theta or not. If not, make sure hypers are set 
+//         to input theta_new
 // Given this proposal, there is no need for transition densities
-arma::vec theta_proposal(arma::vec theta) {
-  for(unsigned int j = 0; j < theta.size(); j++) {
-    theta(j) = M_PI * unif_rand();
+arma::mat theta_proposal(const std::vector<Node*>& forest, const arma::mat& X,
+                         const arma::vec& Y, const arma::vec& weights,
+                         Hypers& hypers, double s, bool toNew, arma::vec theta_propose) {
+  // the matrix to store results:
+  //    1st row: mode
+  //    2nd row: theta_new
+  //    3rd row: proposal density theta_old;
+  //    4th row: proposal density theta_new;
+  arma::mat res;
+  arma::vec theta_old = hypers.theta;
+  if(toNew){
+    arma::vec theta_new = theta_old;
+  } else {
+    arma::vec theta_new = theta_propose;
   }
-  return theta;
+  arma::vec theta_new = theta_old;
+  
+  double P_old = logLT_Theta(forest, Y, weights, X, hypers);
+  double L, M, R;
+  double theta;
+  double P1, P2, slope1, slope2, gamma, mode;
+  
+  for(unsigned int j = 0; j < theta_old.size(); j++) {
+    //theta(j) = M_PI * unif_rand();
+    // Step1: find the direction of the mode
+    do{
+      theta_new(j) = theta_new(j) - s;
+      hypers.setTheta(theta_new);
+      P1 = logLT_Theta(forest, Y, weights, X, hypers);
+      slope1 = (P1 - P_old) / s;
+      
+      theta_new(j) = theta_new(j) + 2*s;
+      hypers.setTheta(theta_new);
+      P2 = logLT_Theta(forest, Y, weights, X, hypers);
+      slope2 = (P2 - P_old) / s;
+      
+      if (slope1 < 0 && slope2 < 0){
+        // to the right of the mode
+        theta_new(j) = theta_new(j) - s;
+      }else if (slope1 > 0 && slope2 > 0){
+        // to the left of the mode
+        theta_new(j) = theta_new(j) + s;
+      }
+    } while (slope1 * slope2 > 0);
+    
+    // Step 2: Setup for finding the mode
+    M = theta_new(j);
+    L = M - s;
+    R = M + s;
+    
+    hypers.setTheta(theta_new);
+    double P_new = logLT_Theta(forest, Y, weights, X, hypers);
+    theta_new(j) = L;
+    hypers.setTheta(theta_new);
+    P1 = logLT_Theta(forest, Y, weights, X, hypers);
+    theta_new(j) = R;
+    hypers.setTheta(theta_new);
+    P2 = logLT_Theta(forest, Y, weights, X, hypers);
+    
+    if(P1 > P2){
+      gamma = (P2 - P_new) / s;
+      mode = (P1 - P2 + gamma * (L+R))/(2*gamma);
+      
+    }else {
+      gamma = (P_new - P1) / s;
+      mode = (P2 - P1 + gamma * (L+R))/(2*gamma);
+    }
+    
+    // Step 3: new proposal
+    if(toNew){
+      theta_new(j) = 
+    }
+  }
+  
+  hypers.setTheta(theta_old);
+  return theta_new;
 }
 
 void Hypers::SetTheta(arma::vec theta_new) {
