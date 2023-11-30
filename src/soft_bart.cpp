@@ -2140,29 +2140,22 @@ double loglik_Theta(const std::vector<Node*>& forest, arma::vec theta_new, const
   return out;
 }
 
-// Prior (unif on 0 to pi) as proposal
+// Indepence-type of proposal (according to Park and )
 
 //Inputs:
 //  forest, X, Y, weights, hypers: same definition as in logLT_Theta
-//  s: step_width of the proposal distribution
+//  s: step_width of mode searching
 //  toNew: boolean, generate new theta or not. If not, make sure hypers are set 
 //         to input theta_new
 // Given this proposal, there is no need for transition densities
-arma::mat theta_proposal(const std::vector<Node*>& forest, const arma::mat& X,
+arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
                          const arma::vec& Y, const arma::vec& weights,
-                         Hypers& hypers, double s, bool toNew, arma::vec theta_propose) {
+                         Hypers& hypers, double s) {
   // the matrix to store results:
   //    1st row: mode
   //    2nd row: theta_new
-  //    3rd row: proposal density theta_old;
-  //    4th row: proposal density theta_new;
-  arma::mat res;
+
   arma::vec theta_old = hypers.theta;
-  if(toNew){
-    arma::vec theta_new = theta_old;
-  } else {
-    arma::vec theta_new = theta_propose;
-  }
   arma::vec theta_new = theta_old;
   
   double P_old = logLT_Theta(forest, Y, weights, X, hypers);
@@ -2218,7 +2211,7 @@ arma::mat theta_proposal(const std::vector<Node*>& forest, const arma::mat& X,
     
     // Step 3: new proposal
     if(toNew){
-      theta_new(j) = 
+      theta_new(j) = mode;
     }
   }
   
