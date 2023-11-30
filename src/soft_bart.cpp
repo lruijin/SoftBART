@@ -2140,7 +2140,7 @@ double loglik_Theta(const std::vector<Node*>& forest, arma::vec theta_new, const
   return out;
 }
 
-// Indepence-type of proposal (according to Park and )
+// The mode of proposal distribution (according to Park 2018)
 
 //Inputs:
 //  forest, X, Y, weights, hypers: same definition as in logLT_Theta
@@ -2151,9 +2151,7 @@ double loglik_Theta(const std::vector<Node*>& forest, arma::vec theta_new, const
 arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
                          const arma::vec& Y, const arma::vec& weights,
                          Hypers& hypers, double s) {
-  // the matrix to store results:
-  //    1st row: mode
-  //    2nd row: theta_new
+  // the vector to store mode
 
   arma::vec theta_old = hypers.theta;
   arma::vec theta_new = theta_old;
@@ -2214,10 +2212,18 @@ arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
       theta_new(j) = mode;
     }
   }
-  
-  hypers.setTheta(theta_old);
   return theta_new;
 }
+
+// Independence-type of proposal (according to Park 2018)
+
+arma::vec theta_proposal(arma::vec mode, double s){
+  for(unsigned int j = 0; j < mode.size(); j++) {
+    theta_new(j) = randn(distr_param(mode(j),s));
+    return theta_new;
+  }
+}
+  
 
 void Hypers::SetTheta(arma::vec theta_new) {
   theta = theta_new;
@@ -2228,18 +2234,23 @@ void Hypers::UpdateTheta(const std::vector<Node*>& forest,
                          const arma::vec& Y,
                          const arma::vec& weights,
                          const arma::mat& X, const arma::mat& X_test,
-                         Hypers& hypers) {
+                         Hypers& hypers,
+                         double s) {
   
   arma::vec theta_old = hypers.theta;
-  arma::vec theta_new = theta_proposal(hypers.theta);
+  arma::vec mode_old = theta_mode(forest, X, Y, weights, hypers, s);
+  arma::vec theta_new = theta_proposal(mode_old, s);
+  hypers.SetTheta(theta_new);
+  arma::vec mode_new = theta_mode(forest, X, Y, weights, hypers, s);
+  hypers.SetTheta(theta_old);
   
   // Rcout << "\ntheta old = " << theta_old << "\n";
   // Rcout << "\ntheta new = " << theta_new << "\n";
   
   double loglik_new = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
   double loglik_old = loglik_Theta(forest, theta_old, X, Y, weights, hypers);
-  double new_to_old = 1;
-  double old_to_new = 1;
+  double new_to_old = log_normpdf(theta_old, mode_new, s);
+  double old_to_new = log_normpdf(theta_new, mode_old, s);
   
   bool accept_mh = do_mh(loglik_new, loglik_old, new_to_old, old_to_new);
   
