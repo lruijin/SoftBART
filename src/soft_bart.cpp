@@ -40,7 +40,7 @@ Node::Node() {
   current_weight = 0.0;
 }
 
-Opts InitOpts(int num_burn, int num_thin, int num_save, int num_print,
+Opts InitOpts(int num_burn, int num_thin, double step_width, int num_save, int num_print,
               bool update_sigma_mu, bool update_s, bool update_alpha,
               bool update_beta, bool update_gamma, bool update_tau,
               bool update_tau_mean, bool update_num_tree, bool update_sigma) {
@@ -61,6 +61,7 @@ Opts InitOpts(int num_burn, int num_thin, int num_save, int num_print,
   out.update_tau_mean = update_tau_mean;
   out.update_num_tree = update_num_tree;
   out.update_sigma = update_sigma;
+  out.step_width = step_width;
   //out.update_theta = update_theta;
   
   return out;
@@ -571,7 +572,7 @@ Rcpp::List do_soft_bart(const arma::mat& X,
     // if(hypers.sim) hypers.UpdateTheta(forest, Y, weights, X, hypers); //Use X instead of Z
     // Rcout << "\nInside do_soft_bart sim 2 = " << hypers.sim << "\n";
     if(hypers.sim) {
-      hypers.UpdateTheta(forest, Y, weights, X, X_test, hypers); //Use X instead of Z
+      hypers.UpdateTheta(forest, Y, weights, X, X_test, hypers, opts.s); //Use X instead of Z
       Z = hypers.Z; //X * theta2eta(hypers); // Compute single index
       Z_test = hypers.Z_test; //X_test * theta2eta(hypers); // Compute single index
     }
@@ -613,7 +614,7 @@ Rcpp::List do_soft_bart(const arma::mat& X,
       // if(hypers.sim) hypers.UpdateTheta(forest, Y, weights, X, hypers); //Use X instead of Z
       // Rcout << "\nInside do_soft_bart sim 3 = " << hypers.sim << "\n";
       if(hypers.sim) {
-        hypers.UpdateTheta(forest, Y, weights, X, X_test, hypers); //Use X instead of Z
+        hypers.UpdateTheta(forest, Y, weights, X, X_test, hypers, opts.s); //Use X instead of Z
         Z = hypers.Z; //X * theta2eta(hypers); // Compute single index
         Z_test = hypers.Z_test; //X_test * theta2eta(hypers); // Compute single index
       }
@@ -1414,13 +1415,13 @@ List SoftBart(const arma::mat& X, const arma::vec& Y, const arma::mat& X_test,
               double num_tree_prob,
               double temperature, const arma::vec& weights, arma::vec& theta,
               bool sim, int num_burn,
-              int num_thin, int num_save, int num_print, bool update_sigma_mu,
+              int num_thin, int num_save, double theta_width, int num_print, bool update_sigma_mu,
               bool update_s, bool update_alpha, bool update_beta, bool update_gamma,
               bool update_tau, bool update_tau_mean, bool update_num_tree,
               bool update_sigma) {
   
   // Rcout << "Doing Opts\n";
-  Opts opts = InitOpts(num_burn, num_thin, num_save, num_print, update_sigma_mu,
+  Opts opts = InitOpts(num_burn, num_thin, theta_width, num_save, num_print, update_sigma_mu,
                        update_s, update_alpha, update_beta, update_gamma,
                        update_tau, update_tau_mean, update_num_tree,
                        update_sigma);
