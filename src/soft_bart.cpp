@@ -40,7 +40,7 @@ Node::Node() {
   current_weight = 0.0;
 }
 
-Opts InitOpts(int num_burn, int num_thin, double step_width, int num_save, int num_print,
+Opts InitOpts(int num_burn, int num_thin, double theta_width, int num_save, int num_print,
               bool update_sigma_mu, bool update_s, bool update_alpha,
               bool update_beta, bool update_gamma, bool update_tau,
               bool update_tau_mean, bool update_num_tree, bool update_sigma) {
@@ -614,7 +614,7 @@ Rcpp::List do_soft_bart(const arma::mat& X,
       // if(hypers.sim) hypers.UpdateTheta(forest, Y, weights, X, hypers); //Use X instead of Z
       // Rcout << "\nInside do_soft_bart sim 3 = " << hypers.sim << "\n";
       if(hypers.sim) {
-        hypers.UpdateTheta(forest, Y, weights, X, X_test, hypers, opts.step_width); //Use X instead of Z
+        hypers.UpdateTheta(forest, Y, weights, X, X_test, hypers, opts.theta_width); //Use X instead of Z
         Z = hypers.Z; //X * theta2eta(hypers); // Compute single index
         Z_test = hypers.Z_test; //X_test * theta2eta(hypers); // Compute single index
       }
@@ -2151,13 +2151,13 @@ double loglik_Theta(const std::vector<Node*>& forest, arma::vec theta_new, const
 // Given this proposal, there is no need for transition densities
 arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
                          const arma::vec& Y, const arma::vec& weights,
-                         Hypers& hypers, double s) {
+                         Hypers& hypers, const double& s) {
   // the vector to store mode
 
   arma::vec theta_old = hypers.theta;
   arma::vec theta_new = theta_old;
   
-  double P_old = logLT_Theta(forest, Y, weights, X, hypers);
+  double P_old = loglik_Theta(forest, theta_old, X, Y, weights, hypers);
   double L, M, R;
   double P1, P2, slope1, slope2, gamma, mode;
   
@@ -2166,13 +2166,11 @@ arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
     // Step1: find the direction of the mode
     do{
       theta_new(j) = theta_new(j) - s;
-      hypers.SetTheta(theta_new);
-      P1 = logLT_Theta(forest, Y, weights, X, hypers);
+      P1 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
       slope1 = (P1 - P_old) / s;
       
       theta_new(j) = theta_new(j) + 2*s;
-      hypers.SetTheta(theta_new);
-      P2 = logLT_Theta(forest, Y, weights, X, hypers);
+      P2 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
       slope2 = (P2 - P_old) / s;
       
       if (slope1 < 0 && slope2 < 0){
@@ -2189,14 +2187,11 @@ arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
     L = M - s;
     R = M + s;
     
-    hypers.SetTheta(theta_new);
-    double P_new = logLT_Theta(forest, Y, weights, X, hypers);
+    double P_new = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
     theta_new(j) = L;
-    hypers.SetTheta(theta_new);
-    P1 = logLT_Theta(forest, Y, weights, X, hypers);
+    P1 = loglik_Theta(forest, theta_old, X, Y, weights, hypers);
     theta_new(j) = R;
-    hypers.SetTheta(theta_new);
-    P2 = logLT_Theta(forest, Y, weights, X, hypers);
+    P2 = loglik_Theta(forest, theta_old, X, Y, weights, hypers);
     
     if(P1 > P2){
       gamma = (P2 - P_new) / s;
@@ -2215,7 +2210,7 @@ arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
 
 // Independence-type of proposal (according to Park 2018)
 
-arma::vec theta_proposal(arma::vec mode, double s){
+arma::vec theta_proposal(arma::vec mode, const double& s){
   arma::vec theta_new;
   for(unsigned int j = 0; j < mode.size(); j++) {
     theta_new(j) = randn(distr_param(mode(j),s));
@@ -2234,7 +2229,7 @@ void Hypers::UpdateTheta(const std::vector<Node*>& forest,
                          const arma::vec& weights,
                          const arma::mat& X, const arma::mat& X_test,
                          Hypers& hypers,
-                         constdouble& s) {
+                         const double& s) {
   
   arma::vec theta_old = hypers.theta;
   arma::vec mode_old = theta_mode(forest, X, Y, weights, hypers, s);

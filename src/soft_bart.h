@@ -51,7 +51,8 @@ struct Hypers {
                    const arma::vec& weights,
                    const arma::mat& X,
                    const arma::mat& X_test,
-                   Hypers& hypers);
+                   Hypers& hypers,
+                   const double& s);
   void SetTheta(arma::vec theta_new);
   //void loglik_Theta(const std::vector<Node*>& forest);
   
@@ -264,8 +265,8 @@ arma::vec theta2eta(const Hypers& hypers);
 
 arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
                      const arma::vec& Y, const arma::vec& weights,
-                     Hypers& hypers, double s)
-arma::vec theta_proposal(arma::vec mode, double s);
+                     Hypers& hypers, const double& s);
+arma::vec theta_proposal(arma::vec mode, const double& s);
 
 // void SetTheta(arma::vec theta_new, Hypers& hypers);
 
