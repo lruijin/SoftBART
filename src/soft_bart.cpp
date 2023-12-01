@@ -572,7 +572,7 @@ Rcpp::List do_soft_bart(const arma::mat& X,
     // if(hypers.sim) hypers.UpdateTheta(forest, Y, weights, X, hypers); //Use X instead of Z
     // Rcout << "\nInside do_soft_bart sim 2 = " << hypers.sim << "\n";
     if(hypers.sim) {
-      hypers.UpdateTheta(forest, Y, weights, X, X_test, hypers, opts.s); //Use X instead of Z
+      hypers.UpdateTheta(forest, Y, weights, X, X_test, hypers, opts.theta_width); //Use X instead of Z
       Z = hypers.Z; //X * theta2eta(hypers); // Compute single index
       Z_test = hypers.Z_test; //X_test * theta2eta(hypers); // Compute single index
     }
@@ -614,7 +614,7 @@ Rcpp::List do_soft_bart(const arma::mat& X,
       // if(hypers.sim) hypers.UpdateTheta(forest, Y, weights, X, hypers); //Use X instead of Z
       // Rcout << "\nInside do_soft_bart sim 3 = " << hypers.sim << "\n";
       if(hypers.sim) {
-        hypers.UpdateTheta(forest, Y, weights, X, X_test, hypers, opts.s); //Use X instead of Z
+        hypers.UpdateTheta(forest, Y, weights, X, X_test, hypers, opts.step_width); //Use X instead of Z
         Z = hypers.Z; //X * theta2eta(hypers); // Compute single index
         Z_test = hypers.Z_test; //X_test * theta2eta(hypers); // Compute single index
       }

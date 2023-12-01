@@ -119,6 +119,7 @@ struct Node {
 struct Opts {
   int num_burn;
   int num_thin;
+  double theta_width;
   int num_save;
   int num_print;
   
@@ -141,6 +142,7 @@ struct Opts {
     
     num_burn = 1;
     num_thin = 1;
+    theta_width = 0.5;
     num_save = 1;
     num_print = 100;
     
@@ -162,6 +164,7 @@ struct Opts {
     num_save = opts_["num_save"];
     num_print = opts_["num_print"];
     cache_trees = opts_["cache_trees"];
+    theta_width= opts_["theta_width"];
     //update_theta = opts_["update_theta"];
   }
   
@@ -204,7 +207,7 @@ public:
 };
 
 
-Opts InitOpts(int num_burn, int num_thin, int num_save, int num_print,
+Opts InitOpts(int num_burn, int num_thin, double theta_width, int num_save, int num_print,
               bool update_sigma_mu, bool update_s, bool update_alpha,
               bool update_beta, bool update_gamma, bool update_tau,
               bool update_tau_mean, bool update_num_tree, 
@@ -259,7 +262,10 @@ bool is_left(Node* n);
 
 arma::vec theta2eta(const Hypers& hypers);
 
-arma::vec theta_proposal(arma::vec theta);
+arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
+                     const arma::vec& Y, const arma::vec& weights,
+                     Hypers& hypers, double s)
+arma::vec theta_proposal(arma::vec mode, double s)
 
 // void SetTheta(arma::vec theta_new, Hypers& hypers);
 

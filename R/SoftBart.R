@@ -93,6 +93,7 @@ Hypers <- function(X,Y, group = NULL, alpha = 1, beta = 2, gamma = 0.95, k = 2,
 #'
 #' @param num_burn Number of warmup iterations for the chain.
 #' @param num_thin Thinning interval for the chain.
+#' @param theta_width The step width of the proposal distribution for theta
 #' @param num_save The number of samples to collect; in total, \code{num_burn + num_save * num_thin} iterations are run.
 #' @param num_print Interval for how often to print the chain's progress.
 #' @param update_sigma_mu If \code{TRUE}, \code{sigma_mu} is  updated, with a half-Cauchy prior on \code{sigma_mu} centered at the initial guess.
@@ -107,7 +108,7 @@ Hypers <- function(X,Y, group = NULL, alpha = 1, beta = 2, gamma = 0.95, k = 2,
 #' @param cache_trees If \code{TRUE}, we save the trees for each MCMC iteration when using the MakeForest interface
 #'
 #' @return Returns a list containing the function arguments.
-Opts <- function(num_burn = 2500, num_thin = 1, num_save = 2500, num_print = 100,
+Opts <- function(num_burn = 2500, num_thin = 1, theta_width = 0.5, num_save = 2500, num_print = 100,
                  update_sigma_mu = TRUE, update_s = FALSE, update_alpha = FALSE,
                  update_beta = FALSE, update_gamma = FALSE, update_tau = TRUE,
                  update_tau_mean = FALSE, update_sigma = TRUE,
@@ -117,6 +118,7 @@ Opts <- function(num_burn = 2500, num_thin = 1, num_save = 2500, num_print = 100
   out <- list()
   out$num_burn        <- num_burn
   out$num_thin        <- num_thin
+  out$theta_width     <- theta_width
   out$num_save        <- num_save
   out$num_print       <- num_print
   out$update_sigma_mu <- update_sigma_mu
@@ -279,6 +281,7 @@ simbart2 <- function(X, Y, X_test, hypers = NULL, opts = Opts(), verbose = TRUE)
                   hypers$sim,
                   opts$num_burn,
                   opts$num_thin,
+                  opts$theta_width,
                   opts$num_save,
                   opts$num_print,
                   opts$update_sigma_mu,
