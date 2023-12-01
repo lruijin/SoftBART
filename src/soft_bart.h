@@ -265,7 +265,7 @@ arma::vec theta2eta(const Hypers& hypers);
 arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
                      const arma::vec& Y, const arma::vec& weights,
                      Hypers& hypers, double s)
-arma::vec theta_proposal(arma::vec mode, double s)
+arma::vec theta_proposal(arma::vec mode, double s);
 
 // void SetTheta(arma::vec theta_new, Hypers& hypers);
 

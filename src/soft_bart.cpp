@@ -61,7 +61,7 @@ Opts InitOpts(int num_burn, int num_thin, double step_width, int num_save, int n
   out.update_tau_mean = update_tau_mean;
   out.update_num_tree = update_num_tree;
   out.update_sigma = update_sigma;
-  out.step_width = step_width;
+  out.theta_width = theta_width;
   //out.update_theta = update_theta;
   
   return out;
@@ -2159,7 +2159,6 @@ arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
   
   double P_old = logLT_Theta(forest, Y, weights, X, hypers);
   double L, M, R;
-  double theta;
   double P1, P2, slope1, slope2, gamma, mode;
   
   for(unsigned int j = 0; j < theta_old.size(); j++) {
@@ -2167,12 +2166,12 @@ arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
     // Step1: find the direction of the mode
     do{
       theta_new(j) = theta_new(j) - s;
-      hypers.setTheta(theta_new);
+      hypers.SetTheta(theta_new);
       P1 = logLT_Theta(forest, Y, weights, X, hypers);
       slope1 = (P1 - P_old) / s;
       
       theta_new(j) = theta_new(j) + 2*s;
-      hypers.setTheta(theta_new);
+      hypers.SetTheta(theta_new);
       P2 = logLT_Theta(forest, Y, weights, X, hypers);
       slope2 = (P2 - P_old) / s;
       
@@ -2190,13 +2189,13 @@ arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
     L = M - s;
     R = M + s;
     
-    hypers.setTheta(theta_new);
+    hypers.SetTheta(theta_new);
     double P_new = logLT_Theta(forest, Y, weights, X, hypers);
     theta_new(j) = L;
-    hypers.setTheta(theta_new);
+    hypers.SetTheta(theta_new);
     P1 = logLT_Theta(forest, Y, weights, X, hypers);
     theta_new(j) = R;
-    hypers.setTheta(theta_new);
+    hypers.SetTheta(theta_new);
     P2 = logLT_Theta(forest, Y, weights, X, hypers);
     
     if(P1 > P2){
@@ -2209,9 +2208,7 @@ arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
     }
     
     // Step 3: new proposal
-    if(toNew){
       theta_new(j) = mode;
-    }
   }
   return theta_new;
 }
@@ -2219,6 +2216,7 @@ arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
 // Independence-type of proposal (according to Park 2018)
 
 arma::vec theta_proposal(arma::vec mode, double s){
+  arma::vec theta_new;
   for(unsigned int j = 0; j < mode.size(); j++) {
     theta_new(j) = randn(distr_param(mode(j),s));
     return theta_new;
@@ -2236,7 +2234,7 @@ void Hypers::UpdateTheta(const std::vector<Node*>& forest,
                          const arma::vec& weights,
                          const arma::mat& X, const arma::mat& X_test,
                          Hypers& hypers,
-                         double s) {
+                         constdouble& s) {
   
   arma::vec theta_old = hypers.theta;
   arma::vec mode_old = theta_mode(forest, X, Y, weights, hypers, s);
