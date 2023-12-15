@@ -2150,71 +2150,71 @@ double loglik_Theta(const std::vector<Node*>& forest, arma::vec theta_new, const
 //         to input theta_new
 // Given this proposal, there is no need for transition densities
 
-arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
-                         const arma::vec& Y, const arma::vec& weights,
-                         Hypers& hypers, const double& s) {
-  // the vector to store mode
+// arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
+//                          const arma::vec& Y, const arma::vec& weights,
+//                          Hypers& hypers, const double& s) {
+//   // the vector to store mode
+// 
+//   arma::vec theta_old = hypers.theta;
+//   arma::vec theta_new = theta_old;
+//   
+//   double P_old = loglik_Theta(forest, theta_old, X, Y, weights, hypers);
+//   double L, M, R;
+//   double P1, P2, slope1, slope2, gamma, mode;
+//   
+//   for(unsigned int j = 0; j < theta_old.size(); j++) {
+//     // Step1: find the direction of the mode
+//     // do{
+//     //   M = theta_new(j);
+//     //   
+//     //   mode =  M - s;
+//     //   theta_new(j) = mode;
+//     //   P1 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
+//     //   slope1 = (P1 - P_old) / s;
+//     // 
+//     //   mode = M + s;
+//     //   theta_new(j) = mode;
+//     //   P2 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
+//     //   slope2 = (P2 - P_old) / s;
+//     //   
+//     // 
+//     //   if (slope1 < 0 && slope2 < 0){
+//     //     // to the right of the mode
+//     //     theta_new(j) = M - s;
+//     //   }else if (slope1 > 0 && slope2 > 0){
+//     //     // to the left of the mode
+//     //     theta_new(j) = M + s;
+//     //   }
+//     // } while (slope1 * slope2 > 0);
+// 
+//     //Step 2: Setup for finding the mode
+//     M = theta_new(j);
+//     L = M - s;
+//     R = M + s;
+// 
+//     double P_new = P_old; //loglik_Theta(forest, theta_new, X, Y, weights, hypers);
+//     theta_new(j) = L;
+//     P1 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
+//     theta_new(j) = R;
+//     P2 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
+// 
+//     if(P1 > P2){
+//       gamma = (P2 - P_new) / s;
+//       mode = (P1 - P2 + gamma * (L+R))/(2*gamma);
+// 
+//     }else {
+//       gamma = (P_new - P1) / s;
+//       mode = (P2 - P1 + gamma * (L+R))/(2*gamma);
+//     }
+// 
+//     // Step 3: calculate the center of the proposal distribution
+//       theta_new(j) = mode;
+//      // theta_new(j) = M_PI * unif_rand();
+//   }
+//   return theta_new;
+// }
 
-  arma::vec theta_old = hypers.theta;
-  arma::vec theta_new = theta_old;
-  
-  double P_old = loglik_Theta(forest, theta_old, X, Y, weights, hypers);
-  double L, M, R;
-  double P1, P2, slope1, slope2, gamma, mode;
-  
-  for(unsigned int j = 0; j < theta_old.size(); j++) {
-    // Step1: find the direction of the mode
-    // do{
-    //   M = theta_new(j);
-    //   
-    //   mode =  M - s;
-    //   theta_new(j) = mode;
-    //   P1 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
-    //   slope1 = (P1 - P_old) / s;
-    // 
-    //   mode = M + s;
-    //   theta_new(j) = mode;
-    //   P2 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
-    //   slope2 = (P2 - P_old) / s;
-    //   
-    // 
-    //   if (slope1 < 0 && slope2 < 0){
-    //     // to the right of the mode
-    //     theta_new(j) = M - s;
-    //   }else if (slope1 > 0 && slope2 > 0){
-    //     // to the left of the mode
-    //     theta_new(j) = M + s;
-    //   }
-    // } while (slope1 * slope2 > 0);
-
-    //Step 2: Setup for finding the mode
-    M = theta_new(j);
-    L = M - s;
-    R = M + s;
-
-    double P_new = P_old; //loglik_Theta(forest, theta_new, X, Y, weights, hypers);
-    theta_new(j) = L;
-    P1 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
-    theta_new(j) = R;
-    P2 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
-
-    if(P1 > P2){
-      gamma = (P2 - P_new) / s;
-      mode = (P1 - P2 + gamma * (L+R))/(2*gamma);
-
-    }else {
-      gamma = (P_new - P1) / s;
-      mode = (P2 - P1 + gamma * (L+R))/(2*gamma);
-    }
-
-    // Step 3: calculate the center of the proposal distribution
-      theta_new(j) = mode;
-     // theta_new(j) = M_PI * unif_rand();
-  }
-  return theta_new;
-}
-
-// Independence-type of proposal (according to Park 2018)
+// Truncated normal proposal
 double truncated_normal_arma(double mu, double sigma, double lower, double upper) {
   double x;
   do {
