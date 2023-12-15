@@ -1,6 +1,6 @@
 #include "soft_bart.h"
 #include "Rcpp.h"
-
+ 
 using namespace Rcpp;
 using namespace arma;
 
@@ -1938,8 +1938,8 @@ arma::mat Forest::do_gibbs(const arma::mat& X, const arma::vec& Y,
 }
 
 // X is X, not Z
-arma::vec Forest::predict_iteration(const arma::mat& X, int r_iter) {
-  int cpp_iter = r_iter - 1;
+arma::vec Forest::predict_iteration(const arma::mat& X, unsigned int r_iter) {
+  unsigned int cpp_iter = r_iter - 1;
   if(r_iter > saved_forests.size())
     stop("Specified iteration exceeds number of saved trees");
   return predict(saved_forests[cpp_iter], X, hypers);
@@ -2149,6 +2149,7 @@ double loglik_Theta(const std::vector<Node*>& forest, arma::vec theta_new, const
 //  toNew: boolean, generate new theta or not. If not, make sure hypers are set 
 //         to input theta_new
 // Given this proposal, there is no need for transition densities
+
 arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
                          const arma::vec& Y, const arma::vec& weights,
                          Hypers& hypers, const double& s) {
@@ -2162,60 +2163,81 @@ arma::vec theta_mode(const std::vector<Node*>& forest, const arma::mat& X,
   double P1, P2, slope1, slope2, gamma, mode;
   
   for(unsigned int j = 0; j < theta_old.size(); j++) {
-    //theta(j) = M_PI * unif_rand();
     // Step1: find the direction of the mode
-    do{
-      theta_new(j) = theta_new(j) - s;
-      P1 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
-      slope1 = (P1 - P_old) / s;
-      
-      theta_new(j) = theta_new(j) + 2*s;
-      P2 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
-      slope2 = (P2 - P_old) / s;
-      
-      if (slope1 < 0 && slope2 < 0){
-        // to the right of the mode
-        theta_new(j) = theta_new(j) - s;
-      }else if (slope1 > 0 && slope2 > 0){
-        // to the left of the mode
-        theta_new(j) = theta_new(j) + s;
-      }
-    } while (slope1 * slope2 > 0);
-    
-    // Step 2: Setup for finding the mode
+    // do{
+    //   M = theta_new(j);
+    //   
+    //   mode =  M - s;
+    //   theta_new(j) = mode;
+    //   P1 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
+    //   slope1 = (P1 - P_old) / s;
+    // 
+    //   mode = M + s;
+    //   theta_new(j) = mode;
+    //   P2 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
+    //   slope2 = (P2 - P_old) / s;
+    //   
+    // 
+    //   if (slope1 < 0 && slope2 < 0){
+    //     // to the right of the mode
+    //     theta_new(j) = M - s;
+    //   }else if (slope1 > 0 && slope2 > 0){
+    //     // to the left of the mode
+    //     theta_new(j) = M + s;
+    //   }
+    // } while (slope1 * slope2 > 0);
+
+    //Step 2: Setup for finding the mode
     M = theta_new(j);
     L = M - s;
     R = M + s;
-    
-    double P_new = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
+
+    double P_new = P_old; //loglik_Theta(forest, theta_new, X, Y, weights, hypers);
     theta_new(j) = L;
-    P1 = loglik_Theta(forest, theta_old, X, Y, weights, hypers);
+    P1 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
     theta_new(j) = R;
-    P2 = loglik_Theta(forest, theta_old, X, Y, weights, hypers);
-    
+    P2 = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
+
     if(P1 > P2){
       gamma = (P2 - P_new) / s;
       mode = (P1 - P2 + gamma * (L+R))/(2*gamma);
-      
+
     }else {
       gamma = (P_new - P1) / s;
       mode = (P2 - P1 + gamma * (L+R))/(2*gamma);
     }
-    
-    // Step 3: new proposal
+
+    // Step 3: calculate the center of the proposal distribution
       theta_new(j) = mode;
+     // theta_new(j) = M_PI * unif_rand();
   }
   return theta_new;
 }
 
 // Independence-type of proposal (according to Park 2018)
+double truncated_normal_arma(double mu, double sigma, double lower, double upper) {
+  double x;
+  do {
+    x = arma::randn() * sigma + mu; // Generate a normal random variable
+  } while (x < lower || x > upper);
+  return x;
+}
 
+
+double log_truncated_normal_pdf(double x, double mu, double sigma, double lower, double upper) {
+  double cdf_upper = normcdf(upper, mu, sigma);
+  double cdf_lower = normcdf(lower, mu, sigma);
+  return log(normpdf(x, mu, sigma) / (cdf_upper - cdf_lower));
+}
+
+//[[Rcpp::export]]
 arma::vec theta_proposal(arma::vec mode, const double& s){
-  arma::vec theta_new;
-  for(unsigned int j = 0; j < mode.size(); j++) {
-    theta_new(j) = randn(distr_param(mode(j),s));
-    return theta_new;
+  arma::vec theta_new = mode;
+  for(unsigned int j = 0; j < theta_new.size(); j++) {
+    double modeJ = mode(j);
+    theta_new(j) = truncated_normal_arma(modeJ, s, 0, M_PI);
   }
+  return theta_new;
 }
   
 
@@ -2230,21 +2252,26 @@ void Hypers::UpdateTheta(const std::vector<Node*>& forest,
                          const arma::mat& X, const arma::mat& X_test,
                          Hypers& hypers,
                          const double& s) {
-  
   arma::vec theta_old = hypers.theta;
-  arma::vec mode_old = theta_mode(forest, X, Y, weights, hypers, s);
+  arma::vec mode_old = theta_old; //theta_mode(forest, X, Y, weights, hypers, s);
   arma::vec theta_new = theta_proposal(mode_old, s);
-  hypers.SetTheta(theta_new);
-  arma::vec mode_new = theta_mode(forest, X, Y, weights, hypers, s);
-  hypers.SetTheta(theta_old);
+  //hypers.SetTheta(theta_new);
+  arma::vec mode_new = theta_new;//theta_mode(forest, X, Y, weights, hypers, s);
+  // hypers.SetTheta(theta_old);
   
   // Rcout << "\ntheta old = " << theta_old << "\n";
   // Rcout << "\ntheta new = " << theta_new << "\n";
   
   double loglik_new = loglik_Theta(forest, theta_new, X, Y, weights, hypers);
   double loglik_old = loglik_Theta(forest, theta_old, X, Y, weights, hypers);
-  double new_to_old = log_normpdf(theta_old, mode_new, s);
-  double old_to_new = log_normpdf(theta_new, mode_old, s);
+
+  double new_to_old = log_truncated_normal_pdf(theta_old(0), mode_new(0), s, 0, M_PI);
+  double old_to_new = log_truncated_normal_pdf(theta_new(0), mode_old(0), s, 0, M_PI);
+
+  for(unsigned int j = 1; j < theta_old.size(); j++) {
+    new_to_old = new_to_old + log_truncated_normal_pdf(theta_old(j), mode_new(j), s, 0, M_PI);
+    old_to_new = old_to_new + log_truncated_normal_pdf(theta_new(j), mode_old(j), s, 0, M_PI);
+  }
   
   bool accept_mh = do_mh(loglik_new, loglik_old, new_to_old, old_to_new);
   
